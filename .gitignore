@@ -1,0 +1,14 @@
+# Binaries
+/memtop
+cmd/memtop/memtop
+
+# Build artifacts
+*.exe
+*.exe~
+
+# Editor files
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
