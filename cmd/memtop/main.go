@@ -14,14 +14,20 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+// statsSnapshot captures a reading from Memcached so the UI can compare
+// successive snapshots and render both absolute numbers and rate data.
 type statsSnapshot struct {
 	Timestamp time.Time
 	Values    map[string]float64
 	Raw       map[string]string
 }
 
+// defaultTimeout bounds network operations so the UI stays responsive even if
+// the Memcached server is unreachable.
 const defaultTimeout = 2 * time.Second
 
+// main wires together CLI parsing, screen setup, and the sampling loop so users
+// get a responsive view of their Memcached instance with minimal flags.
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] [host [port]]\n", os.Args[0])
@@ -129,6 +135,8 @@ loop:
 	}
 }
 
+// fetchStats requests the Memcached stats output and wraps it in a snapshot so
+// the caller can track both raw counters and the time they were observed.
 func fetchStats(addr string) (*statsSnapshot, error) {
 	conn, err := net.DialTimeout("tcp", addr, defaultTimeout)
 	if err != nil {
@@ -175,6 +183,8 @@ func fetchStats(addr string) (*statsSnapshot, error) {
 	}, nil
 }
 
+// calculateRates compares two snapshots and returns per-second deltas so the
+// interface can surface activity trends instead of raw monotonically increasing counters.
 func calculateRates(curr, prev *statsSnapshot) map[string]float64 {
 	result := make(map[string]float64)
 	if curr == nil || prev == nil {
@@ -196,6 +206,8 @@ func calculateRates(curr, prev *statsSnapshot) map[string]float64 {
 	return result
 }
 
+// drawScreen paints the latest metrics on the terminal, keeping the layout
+// consistent so operators can notice anomalies quickly.
 func drawScreen(screen tcell.Screen, addr string, interval time.Duration, stats *statsSnapshot, rates map[string]float64, err error) {
 	screen.Clear()
 	width, height := screen.Size()
@@ -296,6 +308,8 @@ func drawScreen(screen tcell.Screen, addr string, interval time.Duration, stats 
 	screen.Show()
 }
 
+// drawText safely places text on the screen, clipping any overflow so drawing
+// never oversteps the terminal bounds.
 func drawText(screen tcell.Screen, x, y int, style tcell.Style, text string) {
 	if y < 0 {
 		return
@@ -313,6 +327,8 @@ func drawText(screen tcell.Screen, x, y int, style tcell.Style, text string) {
 	}
 }
 
+// rateValue returns a specific metric's rate while tolerating nil maps so the
+// UI can render immediately after startup or a reset.
 func rateValue(rates map[string]float64, key string) float64 {
 	if rates == nil {
 		return 0
@@ -320,6 +336,8 @@ func rateValue(rates map[string]float64, key string) float64 {
 	return rates[key]
 }
 
+// formatBytes renders byte counts using human-readable units, making memory
+// stats approachable without manual conversion.
 func formatBytes(b float64) string {
 	if b < 0 {
 		b = 0
@@ -336,10 +354,14 @@ func formatBytes(b float64) string {
 	return fmt.Sprintf("%.1f %s", b, units[idx])
 }
 
+// formatBytesRate formats bandwidth-style numbers and appends /s so users know
+// they are looking at a rate rather than a total.
 func formatBytesRate(bps float64) string {
 	return fmt.Sprintf("%s/s", formatBytes(bps))
 }
 
+// formatUptime emits a friendly uptime string because wall-clock durations are
+// easier to reason about than raw seconds.
 func formatUptime(seconds float64) string {
 	if seconds <= 0 {
 		return "0s"
@@ -359,6 +381,8 @@ func formatUptime(seconds float64) string {
 	return fmt.Sprintf("%02dh %02dm %02ds", hours, minutes, int(seconds))
 }
 
+// boolToWord converts boolean flags into the exact text expected on screen so
+// the view remains consistent with other status fields.
 func boolToWord(v bool) string {
 	if v {
 		return "yes"
