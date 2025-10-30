@@ -6,23 +6,26 @@ on:
       - "v*"
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - goos: linux
             goarch: amd64
+            ext: ""
           - goos: linux
             goarch: arm64
+            ext: ""
           - goos: darwin
             goarch: amd64
+            ext: ""
           - goos: darwin
             goarch: arm64
+            ext: ""
           - goos: windows
             goarch: amd64
-    permissions:
-      contents: write
+            ext: ".exe"
 
     steps:
       - name: Checkout repository
@@ -39,15 +42,33 @@ jobs:
           CGO_ENABLED: 0
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: |
-          go build -o memtop-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/memtop
+        run: go build -o memtop-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/memtop
 
-      - name: Create checksums
-        run: sha256sum memtop-* > checksums.txt
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: memtop-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          path: memtop-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: memtop-*
+          merge-multiple: true
+          path: dist
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            memtop-*
-            checksums.txt
+          files: dist/*
